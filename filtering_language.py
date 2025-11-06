@@ -9,7 +9,7 @@ from tqdm import tqdm
 def parse_args():
     ap = argparse.ArgumentParser()
     ap.add_argument("--input", required=True)
-    ap.add_argument("--output", default="data/Books_rating_cleaned_new.csv ")
+    ap.add_argument("--output", default="data/Books_rating_cleaned_only_eng.csv")
     ap.add_argument("--text-col", default="cleanText")
     ap.add_argument("--model", default="data/lid.176.ftz")
     ap.add_argument("--chunk", type=int, default=200_000)
@@ -98,10 +98,10 @@ def main():
         [(lang, cnt, cnt / total * 100 if total else 0.0) for lang, cnt in lang_counter.items()],
         columns=["language", "count", "percent"]
     ).sort_values("count", ascending=False)
-    stats_df.to_csv("data/language_counts.csv", index=False)
+    stats_df.to_csv("data/language_counts-2.csv", index=False)
 
     print("English-only file written to:", args.output)
-    print("Language statistics written to: data/language_counts.csv")
+    print("Language statistics written to: data/language_counts-2.csv")
 
 
 if __name__ == "__main__":
