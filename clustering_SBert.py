@@ -59,7 +59,7 @@ def main():
     # ===== load data =====
     from pathlib import Path
     import glob
-    path_book_ratings = "data/Books_rating_embeddings"   
+    path_book_ratings = "/dtu/blackhole/1a/222266/Books_rating_embeddings"   
     in_dir = Path(path_book_ratings)
     files = sorted(glob.glob(str(in_dir / "*.parquet")))[:NUM_FILES]
     all_embeddings, all_ids, all_ratings = [], [], []
@@ -80,11 +80,11 @@ def main():
     df_results = pd.DataFrame({
     "review_id": ids_all,
     "rating": ratings_all,
-    "cluster": labels
+    "cluster_kmeans": labels
     })
 
 
-    csv_path = "data/clustered_reviews_Kmeans_1.csv"
+    csv_path = "/dtu/blackhole/1a/222266/clustered_reviews.csv"
     df_results.to_csv(csv_path, index=False)
 
 
