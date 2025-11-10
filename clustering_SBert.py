@@ -4,6 +4,10 @@ import pyarrow.parquet as pq
 from tqdm import tqdm
 from sklearn.cluster import KMeans
 import pandas as pd
+from sklearn.metrics import davies_bouldin_score
+from sklearn.cluster import DBSCAN
+import umap
+import matplotlib.pyplot as plt
 
 
 # ===== Helper: Arrow-Listen to 2D NumPy =====
@@ -74,18 +78,85 @@ def main():
     ids_all = np.concatenate(all_ids)
     ratings_all = np.concatenate(all_ratings)
 
+    # ===== KMeans Clustering =====
     kmeans = KMeans(n_clusters=K, n_init="auto", random_state=42)
-    labels = kmeans.fit_predict(X_all)
+    labels_k_means = kmeans.fit_predict(X_all)
 
+
+    
+    # ===== DBSCAN Clustering =====
+    dbscan = DBSCAN(
+        eps=2.6,       # max distance between samples in a cluster, tune this
+        min_samples=10, # minimum number of samples to form a cluster
+        metric='euclidean',  # distance metric
+        n_jobs=-1      # use all cores
+    )
+    # Fit DBSCAN
+    labels_db = dbscan.fit_predict(X_all)
+
+    # ===== Evaluate Clustering =====
+    db_index = davies_bouldin_score(X_all, labels_db)
+    print(f"Davies–Bouldin Index db: {db_index:.4f}")
+    db_index = davies_bouldin_score(X_all, labels_k_means)
+    print(f"Davies–Bouldin Index k-means: {db_index:.4f}")
+
+    # ===== Save Results =====
     df_results = pd.DataFrame({
     "review_id": ids_all,
     "rating": ratings_all,
-    "cluster_kmeans": labels
+    "cluster_kmeans": labels_k_means,
+    "cluster_db": labels_db
     })
 
+    # Quick summary
+    print("KMeans Cluster Distribution:")
+    print(df_results["cluster_kmeans"].value_counts().sort_index())
+    print("DBSCAN Cluster Distribution:")
+    print(df_results["cluster_db"].value_counts().sort_index())
 
-    csv_path = "/dtu/blackhole/1a/222266/clustered_reviews.csv"
+    csv_path = "/dtu/blackhole/1a/222266/clustered_reviews_both.csv"
     df_results.to_csv(csv_path, index=False)
+
+    # ===== UMAP Dimensionality Reduction =====
+    # --- Visualization k-means---
+    reducer = umap.UMAP(n_neighbors=20, min_dist=0.3, random_state=42, init='random')
+    embedding_2d = reducer.fit_transform(X_all)
+    plt.figure(figsize=(10, 7))
+    scatter = plt.scatter(
+        embedding_2d[:, 0],
+        embedding_2d[:, 1],
+        c=labels_k_means,
+        cmap='tab10',  # or 'Spectral', 'viridis', etc.
+        s=15,
+        alpha=0.8
+    )
+    plt.colorbar(scatter, label='Cluster')
+    plt.title("UMAP Projection of Embeddings (colored by KMeans Cluster)")
+    plt.xlabel("UMAP Dimension 1")
+    plt.ylabel("UMAP Dimension 2")
+    plt.tight_layout()
+    plt.savefig("/dtu/blackhole/1a/222266/plots/umap_clusters_kmeans.png", dpi=300)  # high-quality PNG
+    plt.close()  # close the figure to free memory
+
+    # --- Visualization dbscan---
+    reducer = umap.UMAP(n_neighbors=20, min_dist=0.3, random_state=42, init='random')
+    embedding_2d = reducer.fit_transform(X_all)
+    plt.figure(figsize=(10, 7))
+    scatter = plt.scatter(
+        embedding_2d[:, 0],
+        embedding_2d[:, 1],
+        c=labels_db,
+        cmap='tab10',  # or 'Spectral', 'viridis', etc.
+        s=15,
+        alpha=0.8
+    )
+    plt.colorbar(scatter, label='Cluster')
+    plt.title("UMAP Projection of Embeddings (colored by DBSCAN Cluster)")
+    plt.xlabel("UMAP Dimension 1")
+    plt.ylabel("UMAP Dimension 2")
+    plt.tight_layout()
+    plt.savefig("/dtu/blackhole/1a/222266/plots/umap_clusters_db.png", dpi=300)  # high-quality PNG
+    plt.close()  # close the figure to free memory
 
 
 if __name__ == "__main__":
