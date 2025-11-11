@@ -1,12 +1,12 @@
 #!/bin/bash
-#BSUB -q gpuv100
-#BSUB -J test_UMAP
+#BSUB -q gpua40
+#BSUB -J test_PCA
 #BSUB -n 8
-#BSUB -R "rusage[mem=32GB]"
+#BSUB -R "rusage[mem=48GB]"
 #BSUB -R "select[gpu]"
 #BSUB -R "span[hosts=1]"
 #BSUB -gpu "num=1"
-#BSUB -W 12:00
+#BSUB -W 24:00
 
 
 ### -- Specify the output and error file. %J is the job-id --
@@ -43,4 +43,4 @@ source ~/miniforge3/bin/activate
 conda activate text-embeddings 
 
 # run filtering
-python3 clustering_SBert.py 
+python3 clustering_PCA.py 
