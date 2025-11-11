@@ -8,6 +8,7 @@ from sklearn.metrics import davies_bouldin_score
 from sklearn.cluster import DBSCAN
 import umap
 import matplotlib.pyplot as plt
+from sklearn.decomposition import PCA
 
 
 # ===== Helper: Arrow-Listen to 2D NumPy =====
@@ -51,6 +52,7 @@ def extract_embeddings_and_meta(fp: str, embeddings_col: str, id_col: str, ratin
     ratings = np.concatenate(ratings)
     return X, ids, ratings
 
+
 # ===== Main =====
 def main():
     # ===== Parameters =====
@@ -59,8 +61,9 @@ def main():
     ID_COL = "row_id"     
     RATING_COL = "review/score"    
     K = 5
+    
 
-    # ===== load data =====
+    # ===== Load data =====
     from pathlib import Path
     import glob
     path_book_ratings = "/dtu/blackhole/1a/222266/Books_rating_embeddings"   
@@ -78,91 +81,96 @@ def main():
     ids_all = np.concatenate(all_ids)
     ratings_all = np.concatenate(all_ratings)
 
-    print('finished reading files', flush=True)
+    print(f"Loaded all embeddings: shape = {X_all.shape}")
+
+    # ===== PCA Dimensionality Reduction =====
+    print(f"Running PCA to reduce to dimension...")
+    pca = PCA(n_components=100, random_state=42)
+    X_reduced = pca.fit_transform(X_all)
+    explained_var = np.sum(pca.explained_variance_ratio_) * 100
+    print(f"PCA done. Retained {explained_var:.2f}% variance.")
 
     # ===== KMeans Clustering =====
     kmeans = KMeans(n_clusters=K, n_init="auto", random_state=42)
-    labels_k_means = kmeans.fit_predict(X_all)
+    labels_k_means = kmeans.fit_predict(X_reduced)
 
-    print('Finished k-means clustering.', flush=True)
+    print('Finished KMeans clustering.', flush=True)
     
     # ===== DBSCAN Clustering =====
     dbscan = DBSCAN(
-        eps=2.6,       # max distance between samples in a cluster, tune this
-        min_samples=10, # minimum number of samples to form a cluster
-        metric='euclidean',  # distance metric
-        n_jobs=-1      # use all cores
+        eps=2.6,        # max distance between samples in a cluster, tune this
+        min_samples=20, # minimum number of samples to form a cluster
+        metric='euclidean',
+        n_jobs=-1
     )
-    # Fit DBSCAN
-    labels_db = dbscan.fit_predict(X_all)
-
-    print('Finished DBSCAN clustering.')
+    labels_db = dbscan.fit_predict(X_reduced)
+    print('Finished DBSCAN clustering.', flush=True)
 
     # ===== Evaluate Clustering =====
-    db_index = davies_bouldin_score(X_all, labels_db)
-    print(f"Davies–Bouldin Index db: {db_index:.4f}")
-    db_index = davies_bouldin_score(X_all, labels_k_means)
-    print(f"Davies–Bouldin Index k-means: {db_index:.4f}")
+    db_index_dbscan = davies_bouldin_score(X_reduced, labels_db)
+    db_index_kmeans = davies_bouldin_score(X_reduced, labels_k_means)
+    print(f"Davies–Bouldin Index (DBSCAN): {db_index_dbscan:.4f}")
+    print(f"Davies–Bouldin Index (KMeans): {db_index_kmeans:.4f}")
 
     # ===== Save Results =====
     df_results = pd.DataFrame({
-    "review_id": ids_all,
-    "rating": ratings_all,
-    "cluster_kmeans": labels_k_means,
-    "cluster_db": labels_db
+        "review_id": ids_all,
+        "rating": ratings_all,
+        "cluster_kmeans": labels_k_means,
+        "cluster_db": labels_db
     })
 
-    # Quick summary
     print("KMeans Cluster Distribution:")
     print(df_results["cluster_kmeans"].value_counts().sort_index())
     print("DBSCAN Cluster Distribution:")
     print(df_results["cluster_db"].value_counts().sort_index())
 
-    csv_path = "/dtu/blackhole/1a/222266/clustered_reviews_both.csv"
+    csv_path = "/dtu/blackhole/1a/222266/clustered_reviews_pca.csv"
     df_results.to_csv(csv_path, index=False)
+    print(f"Saved results to {csv_path}")
 
-    # ===== UMAP Dimensionality Reduction =====
-    # --- Visualization k-means---
+    # ===== UMAP Visualization =====
+    print("Running UMAP visualization...")
     reducer = umap.UMAP(n_neighbors=20, min_dist=0.3, random_state=42, init='random')
-    embedding_2d = reducer.fit_transform(X_all)
+    embedding_2d = reducer.fit_transform(X_reduced)
+
+    # --- Visualization: KMeans ---
     plt.figure(figsize=(10, 7))
     scatter = plt.scatter(
         embedding_2d[:, 0],
         embedding_2d[:, 1],
         c=labels_k_means,
-        cmap='tab10',  # or 'Spectral', 'viridis', etc.
+        cmap='tab10',
         s=15,
         alpha=0.8
     )
     plt.colorbar(scatter, label='Cluster')
-    plt.title("UMAP Projection of Embeddings (colored by KMeans Cluster)")
+    plt.title("UMAP Projection of PCA-reduced Embeddings (KMeans)")
     plt.xlabel("UMAP Dimension 1")
     plt.ylabel("UMAP Dimension 2")
     plt.tight_layout()
-    plt.savefig("/dtu/blackhole/1a/222266/plots/umap_clusters_kmeans.png", dpi=300)  # high-quality PNG
-    plt.close()  # close the figure to free memory
+    plt.savefig("/dtu/blackhole/1a/222266/plots/umap_clusters_kmeans_pca.png", dpi=300)
+    plt.close()
 
-    # --- Visualization dbscan---
-    reducer = umap.UMAP(n_neighbors=20, min_dist=0.3, random_state=42, init='random')
-    embedding_2d = reducer.fit_transform(X_all)
+    # --- Visualization: DBSCAN ---
     plt.figure(figsize=(10, 7))
     scatter = plt.scatter(
         embedding_2d[:, 0],
         embedding_2d[:, 1],
         c=labels_db,
-        cmap='tab10',  # or 'Spectral', 'viridis', etc.
+        cmap='tab10',
         s=15,
         alpha=0.8
     )
     plt.colorbar(scatter, label='Cluster')
-    plt.title("UMAP Projection of Embeddings (colored by DBSCAN Cluster)")
+    plt.title("UMAP Projection of PCA-reduced Embeddings (DBSCAN)")
     plt.xlabel("UMAP Dimension 1")
     plt.ylabel("UMAP Dimension 2")
     plt.tight_layout()
-    plt.savefig("/dtu/blackhole/1a/222266/plots/umap_clusters_db.png", dpi=300)  # high-quality PNG
-    plt.close()  # close the figure to free memory
+    plt.savefig("/dtu/blackhole/1a/222266/plots/umap_clusters_db_pca.png", dpi=300)
+    plt.close()
 
-    print("Clustering and visualization completed.")
+    print("All done!")
 
 
 if __name__ == "__main__":
