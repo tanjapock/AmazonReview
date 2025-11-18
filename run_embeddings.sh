@@ -7,14 +7,15 @@
 #BSUB -R "span[hosts=1]"
 #BSUB -gpu "num=1"
 #BSUB -W 08:00
-#BSUB -o /dev/null
-#BSUB -e /dev/null
+#BSUB -o data/jobs/embeddings_%J.out
+#BSUB -e data/jobs/embeddings_%J.err
+
 
 set -euo pipefail
 
 ROOT=~/ComputationalTools/AmazonReview
-IN="$ROOT/data/Books_rating_cleaned_only_eng.csv"
-OUT_DIR="$ROOT/data/Books_rating_embeddings"   
+IN="/dtu/blackhole/1a/222266/Book_rating_cleaned_engl_subset.csv"
+OUT_DIR="/dtu/blackhole/1a/222266/embeddings_subset"   
 LOG="$ROOT/data/logs/embeddings_${LSB_JOBID}.log"
 
 module purge
@@ -28,7 +29,7 @@ mkdir -p "$ROOT/data/logs" "$OUT_DIR"
 exec >"$LOG" 2>&1
 
 
-python3 create_embeddings-1.py \
+python3 create_embeddings.py \
   --in "$IN" \
   --out "$OUT_DIR" \
   --chunksize 10000 \

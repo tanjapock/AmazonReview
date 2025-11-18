@@ -15,6 +15,10 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from sentence_transformers import SentenceTransformer
 
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
+import torch
+import torch.nn.functional as F
+
 
 def parse_args():
     p = argparse.ArgumentParser()
@@ -34,6 +38,11 @@ def parse_args():
                    choices=["snappy", "gzip", "brotli", "zstd", "none"],
                    help="Parquet-Kompression (default snappy)")
     p.add_argument("--log-file", default=None, help="Pfad zur Logdatei (optional)")
+    p.add_argument(
+        "--sentiment-model",
+        default="nlptown/bert-base-multilingual-uncased-sentiment",
+        help="HuggingFace sentiment model ID (default: 1–5 star sentiment)"
+    )
     return p.parse_args()
 
 
@@ -52,32 +61,73 @@ def setup_logger(log_path: str) -> logging.Logger:
     return logger
 
 
-def as_arrow_table(ids, texts, score, embs):
+def as_arrow_table(ids, texts, score, embs, sent_scores):
     arr_ids = pa.array(ids)
     arr_texts = pa.array(texts, type=pa.string())
     arr_scores = pa.array(score)
     list_of_lists = [emb.tolist() for emb in embs]
     arr_embs = pa.array(list_of_lists, type=pa.list_(pa.float32()))
+    
+    arr_sent = pa.array(sent_scores.tolist(), type=pa.float32())
     return pa.Table.from_arrays(
-        [arr_ids, arr_scores, arr_texts, arr_embs],
-        names=["row_id", "review/score", "cleanText", "embedding"]
+        [arr_ids, arr_scores, arr_texts, arr_embs, arr_sent],
+        names=["row_id", "review/score", "cleanText", "embedding", "sentiment_score"]
+
     )
+
+def compute_sentiment_scores(texts, tokenizer, model, device, batch_size=64, max_length=256):
+
+    scores = []
+    model.eval()
+
+    with torch.no_grad():
+        for start in range(0, len(texts), batch_size):
+            batch_texts = texts[start:start + batch_size]
+            enc = tokenizer(
+                batch_texts,
+                return_tensors="pt",
+                truncation=True,
+                padding=True,
+                max_length=max_length
+            )
+            enc = {k: v.to(device) for k, v in enc.items()}
+
+            outputs = model(**enc)
+            probs = F.softmax(outputs.logits, dim=1)  # shape: [B, 5] (for 1–5 stars)
+
+            stars = torch.arange(1, probs.size(1) + 1, device=device, dtype=torch.float32)
+            batch_scores = (probs * stars).sum(dim=1) 
+            scores.extend(batch_scores.cpu().numpy().tolist())
+
+    return np.array(scores, dtype=np.float32)
 
 
 def run(args, logger):
     os.makedirs(args.out_dir, exist_ok=True)
     compression = None if args.compression == "none" else args.compression
 
-    logger.info("Start: in=%s out_dir=%s model=%s chunksize=%d batch_size=%d compression=%s resume=%s",
-                args.in_path, args.out_dir, args.model, args.chunksize, args.batch_size, args.compression, args.resume)
+    logger.info("Start: in=%s out_dir=%s model=%s chunksize=%d batch_size=%d compression=%s resume=%s sentiment_model=%s",
+                args.in_path, args.out_dir, args.model, args.chunksize,
+                args.batch_size, args.compression, args.resume, args.sentiment_model)
 
-    # Modell laden
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    logger.info("Using device: %s", device)
+    
     try:
         model = SentenceTransformer(args.model)
-        logger.info("Model loaded.")
+        logger.info("SBert  loaded.")
     except Exception:
         logger.exception("Could not load model.")
         sys.exit(2)
+    
+    try:
+        sent_tokenizer = AutoTokenizer.from_pretrained(args.sentiment_model)
+        sent_model = AutoModelForSequenceClassification.from_pretrained(args.sentiment_model)
+        sent_model.to(device)
+        logger.info("Sentiment model loaded.")
+    except Exception:
+        logger.exception("Could not load sentiment model.")
+        sys.exit(5)
 
     # CSV-Reader
     try:
@@ -129,7 +179,16 @@ def run(args, logger):
                 show_progress_bar=True
             ).astype(np.float32)
 
-            table = as_arrow_table(ids, texts, score, embs)
+            sentiment_scores = compute_sentiment_scores(
+                texts,
+                sent_tokenizer,
+                sent_model,
+                device=device,
+                batch_size=64,       
+                max_length=256
+            )
+
+            table = as_arrow_table(ids, texts, score, embs, sentiment_scores)
 
             part_name = f"part-{part_index:05d}.parquet"
             target = os.path.join(args.out_dir, part_name)
