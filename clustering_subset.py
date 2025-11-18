@@ -84,6 +84,12 @@ def main():
 
     print(f"Loaded all embeddings: shape = {X_all.shape}")
 
+    # online use random sample for quick testing
+    sample_indices = np.random.choice(X_all.shape[0], size=1000000, replace=False)
+    X_all = X_all[sample_indices]
+
+    print(f"Sampled embeddings for testing: shape = {X_all.shape}", flush=True)
+
     # ===== PCA Dimensionality Reduction =====
     print(f"Running PCA to reduce to dimension...")
     pca = PCA(n_components=100, random_state=42)
@@ -108,8 +114,6 @@ def main():
     db_index_kmeans = davies_bouldin_score(X_reduced, labels_k_means)
     print(f"Davies–Bouldin Index (KMeans): {db_index_kmeans:.4f}")
 
-    print("KMeans Cluster Distribution:")
-    print(df_results["cluster_kmeans"].value_counts().sort_index())
 
     # ===== UMAP Visualization =====
     print("Running UMAP visualization...")
@@ -131,7 +135,7 @@ def main():
     plt.xlabel("UMAP Dimension 1")
     plt.ylabel("UMAP Dimension 2")
     plt.tight_layout()
-    plt.savefig("/dtu/blackhole/1a/222266/plots/umap_clusters_kmeans_pca.png", dpi=300)
+    plt.savefig("/dtu/blackhole/1a/222266/plots/umap_clusters_kmeans_pca_1M.png", dpi=300)
     plt.close()
     
     # ===== DBSCAN Clustering =====
@@ -160,7 +164,10 @@ def main():
     print("DBSCAN Cluster Distribution:")
     print(df_results["cluster_db"].value_counts().sort_index())
 
-    csv_path = "/dtu/blackhole/1a/222266/clustered_reviews_pca.csv"
+    print("KMeans Cluster Distribution:")
+    print(df_results["cluster_kmeans"].value_counts().sort_index())
+
+    csv_path = "/dtu/blackhole/1a/222266/clustered_reviews_pca_1M.csv"
     df_results.to_csv(csv_path, index=False)
     print(f"Saved results to {csv_path}")
 
@@ -181,7 +188,7 @@ def main():
     plt.xlabel("UMAP Dimension 1")
     plt.ylabel("UMAP Dimension 2")
     plt.tight_layout()
-    plt.savefig("/dtu/blackhole/1a/222266/plots/umap_clusters_db_pca.png", dpi=300)
+    plt.savefig("/dtu/blackhole/1a/222266/plots/umap_clusters_db_pca_1M.png", dpi=300)
     plt.close()
 
     print("All done!")
