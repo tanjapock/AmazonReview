@@ -38,6 +38,5 @@ module load gcc
 source ~/ComputationalTools/AmazonReview/.venv/bin/activate
 
 
-
 # run filtering
 python3 clustering_sentiment.py 

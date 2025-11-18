@@ -9,7 +9,8 @@
 ### -- ask for number of cores (default: 1) --
 #BSUB -n 16
 #BSUB -R "span[hosts=1]"
-#BSUB -R "rusage[mem=2000]" 
+#BSUB -R "rusage[mem=32GB]" 
+
 
 ### -- set walltime limit: hh:mm --  maximum 24 hours for GPU-queues right now
 #BSUB -W 5:00
@@ -18,8 +19,8 @@
 
 ### -- Specify the output and error file. %J is the job-id --
 ### -- -o and -e mean append, -oo and -eo mean overwrite --
-#BSUB -o data/new_logs/umap_red_%J.out
-#BSUB -e data/new_logs/umap_red_%J.err
+#BSUB -o data/new_logs/umap_cluster_%J.out
+#BSUB -e data/new_logs/umap_cluster_%J.err
 # -- end of LSF options --
 
 set -euo pipefail
@@ -41,4 +42,4 @@ source ~/ComputationalTools/AmazonReview/.venv/bin/activate
 
 
 # run filtering
-python3 umap_pca.py
+python3 umap_clustering.py

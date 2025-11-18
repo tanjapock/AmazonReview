@@ -59,26 +59,14 @@ def plot_elbow(X: np.ndarray, k_values, out_path: Path):
 
 
 
-# === Step 3: Plot the results ===
-plt.figure(figsize=(8, 5))
-plt.plot(k_values, db_scores, marker='o', linestyle='-', label='Davies–Bouldin Index')
-plt.title("Davies–Bouldin Index vs Number of Clusters (k)")
-plt.xlabel("Number of clusters (k)")
-plt.ylabel("Davies–Bouldin Index (lower is better)")
-plt.grid(True)
-plt.legend()
-plt.tight_layout()
-plt.show()
-
-
 def main():
     # === Paths ===
     PCA_PARQUET = Path("/dtu/blackhole/1a/222266/embeddings_umap15.parquet")
-    OUT_CSV = Path("/dtu/blackhole/1a/222266/clustered_reviews_umap15.csv")
+    OUT_CSV = Path("/dtu/blackhole/1a/222266/clustered_reviews_umap15_final.csv")
     PLOT_DIR = Path("/zhome/3d/c/222266/ComputationalTools/AmazonReview/data")
     PLOT_DIR.mkdir(parents=True, exist_ok=True)
 
-    OUT_ELBOW = PLOT_DIR / "elbow_plot_kmeans_umap15.png"
+    OUT_ELBOW = PLOT_DIR / "elbow_plot_kmeans_umap15_final.png"
 
     # === Columns ===
     ID_COL = "row_id"
@@ -124,9 +112,9 @@ def main():
     # ===== 1) Elbow Plot =====
     plot_elbow(X_pca, K_VALUES, OUT_ELBOW)
 
-
+    
     # ===== 2) Choose your preferred k after seeing elbow plot =====
-    K = 5   # <--- HIER kannst du k ändern nach Elbow-Plot
+    K = 7   # <--- HIER kannst du k ändern nach Elbow-Plot
     print(f"Running final KMeans with k={K} ...")
 
     kmeans = KMeans(n_clusters=K, n_init="auto", random_state=42)
@@ -188,7 +176,7 @@ def main():
 
     df.to_csv(OUT_CSV, index=False)
     print(f"Saved clustering results to {OUT_CSV}")
-
+    
 
 if __name__ == "__main__":
     main()

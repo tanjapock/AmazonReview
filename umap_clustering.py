@@ -29,7 +29,7 @@ def listarray_to_2d_numpy(arr: pa.Array, dtype=np.float32) -> np.ndarray:
 
 def main():
     PCA_PARQUET = Path("/dtu/blackhole/1a/222266/embeddings_subset_pca.parquet")
-    CLUSTER_CSV = Path("/dtu/blackhole/1a/222266/clustered_reviews_pca.csv")
+    CLUSTER_CSV = Path("/dtu/blackhole/1a/222266/clustered_reviews_umap15_final.csv")
     OUT_DIR = Path("/zhome/3d/c/222266/ComputationalTools/AmazonReview/data/")
     OUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -92,7 +92,7 @@ def main():
         cmap=cnao
     )
     plt.colorbar(sc, label="cluster_kmeans")
-    plt.title("UMAP (2D) of PCA embeddings colored by KMeans cluster")
+    plt.title("UMAP of PCA embeddings colored by KMeans cluster")
     plt.xlabel("UMAP-1")
     plt.ylabel("UMAP-2")
     plt.tight_layout()
@@ -102,6 +102,8 @@ def main():
     print(f"Saved: {out_path}")
 
     # ===== 5) Plot: DBSCAN-Cluster =====
+    n_clusters = len(np.unique(labels_db))
+    cmap_db = plt.cm.get_cmap("hsv", n_clusters)
     plt.figure(figsize=(10, 7))
     sc = plt.scatter(
         X_umap2d[:, 0],
@@ -109,10 +111,10 @@ def main():
         c=labels_db,
         s=5,
         alpha=0.7,
-        cmap="tab10"
+        cmap=cmap_db
     )
     plt.colorbar(sc, label="cluster_dbscan")
-    plt.title("UMAP (2D) of PCA embeddings colored by DBSCAN cluster")
+    plt.title("UMAP of PCA embeddings colored by DBSCAN cluster")
     plt.xlabel("UMAP-1")
     plt.ylabel("UMAP-2")
     plt.tight_layout()
