@@ -6,6 +6,8 @@ from tqdm import tqdm
 import pandas as pd
 import umap
 import matplotlib.pyplot as plt
+from matplotlib.colors import ListedColormap , BoundaryNorm
+from matplotlib.lines import Line2D
 from matplotlib.colors import ListedColormap
 
 
@@ -80,49 +82,124 @@ def main():
     X_umap2d = reducer.fit_transform(X_pca)
 
     # ===== 4) Plot: KMeans-Cluster =====
-    base_cmap = plt.get_cmap("tab10")
-    cnao = ListedColormap(base_cmap.colors[:len(np.unique(labels_km))]) 
+    unique_km = np.unique(labels_km)
+    n_km = len(unique_km)
+
+    label2idx_km = {lab: i for i, lab in enumerate(unique_km)}
+    idx_km = np.array([label2idx_km[lab] for lab in labels_km])
+
+    cmap_km = plt.cm.get_cmap("tab20", n_km)
+
     plt.figure(figsize=(10, 7))
     sc = plt.scatter(
         X_umap2d[:, 0],
         X_umap2d[:, 1],
-        c=labels_km,
+        c=idx_km,
         s=5,
         alpha=0.7,
-        cmap=cnao
+        cmap=cmap_km,
     )
-    plt.colorbar(sc, label="cluster_kmeans")
+
+    # Legend statt Colorbar
+    handles = [
+        Line2D([0], [0], marker='o', linestyle='',
+            color=cmap_km(i), label=str(lab))
+        for i, lab in enumerate(unique_km)
+    ]
+    plt.legend(handles=handles, title="cluster_kmeans",
+            bbox_to_anchor=(1.05, 1), loc="upper left")
+
     plt.title("UMAP of PCA embeddings colored by KMeans cluster")
     plt.xlabel("UMAP-1")
     plt.ylabel("UMAP-2")
     plt.tight_layout()
-    out_path = OUT_DIR / "umap_pca_clusters_kmeans.png"
+    out_path = OUT_DIR / "umap_pca_clusters_kmeans2.png"
     plt.savefig(out_path, dpi=300)
     plt.close()
-    print(f"Saved: {out_path}")
 
     # ===== 5) Plot: DBSCAN-Cluster =====
-    n_clusters = len(np.unique(labels_db))
-    cmap_db = plt.cm.get_cmap("hsv", n_clusters)
+    # convert labels to pandas for counting
+    labels = np.array(labels_db)
+
+    # Maske für Noise
+    noise_mask = labels == -1
+    non_noise_mask = ~noise_mask
+
+    # eindeutige Nicht-Noise-Cluster
+    unique_non_noise = np.unique(labels[non_noise_mask])
+    n_clusters = len(unique_non_noise)
+
+    # Mappe Nicht-Noise-Label -> 0..n_clusters-1
+    label2idx = {lab: i for i, lab in enumerate(unique_non_noise)}
+    idx_non_noise = np.array([label2idx[lab] for lab in labels[non_noise_mask]])
+
+    # Bunte Farben NUR für Nicht-Noise-Cluster
+    cmap_clusters = plt.cm.get_cmap("hsv", n_clusters)  # schön bunt, kein Grau
+    colors_clusters = cmap_clusters(range(n_clusters))
+    cmap_clusters = ListedColormap(colors_clusters)
+
     plt.figure(figsize=(10, 7))
-    sc = plt.scatter(
-        X_umap2d[:, 0],
-        X_umap2d[:, 1],
-        c=labels_db,
-        s=5,
-        alpha=0.7,
-        cmap=cmap_db
+
+    # 1) Noise separat, klein + sehr transparent, eindeutig grau
+    plt.scatter(
+        X_umap2d[noise_mask, 0],
+        X_umap2d[noise_mask, 1],
+        c=[(0.5, 0.5, 0.5, 0.2)],  # nur Noise = grau, alpha 0.2
+        s=3,
+        marker='o',
+        linewidths=0,
     )
-    plt.colorbar(sc, label="cluster_dbscan")
-    plt.title("UMAP of PCA embeddings colored by DBSCAN cluster")
+
+    # 2) Alle echten Cluster bunt darüber
+    sc = plt.scatter(
+        X_umap2d[non_noise_mask, 0],
+        X_umap2d[non_noise_mask, 1],
+        c=idx_non_noise,
+        s=5,
+        alpha=0.9,
+        cmap=cmap_clusters,
+    )
+
+    # -------- Legende: Noise + Top-K Cluster + "..." --------
+    labels_series = pd.Series(labels[non_noise_mask])
+    cluster_sizes = labels_series.value_counts().sort_values(ascending=False)
+
+    top_k = 10
+    top_labels = cluster_sizes.index[:top_k].tolist()
+
+    handles = []
+
+    # Noise
+    handles.append(
+        Line2D([0], [0], marker='o', linestyle='', color=(0.5, 0.5, 0.5, 0.8),
+            label="noise (-1)")
+    )
+
+    # Top-K Cluster (ohne n, wie du wolltest)
+    for lab in top_labels:
+        i = label2idx[lab]
+        handles.append(
+            Line2D([0], [0], marker='o', linestyle='',
+                color=colors_clusters[i],
+                label=f"cluster {lab}")
+        )
+
+    # "… weitere Cluster"
+    remaining = len(unique_non_noise) - len(top_labels)
+    if remaining > 0:
+        handles.append(
+            Line2D([0], [0], marker='', linestyle='', label=f"… 92 further clusters")
+        )
+
+    plt.legend(handles=handles, title="HDBSCAN clusters",
+            bbox_to_anchor=(1.05, 1), loc="upper left")
+
+    #plt.title("UMAP of PCA embeddings colored by HDBSCAN clusters")
     plt.xlabel("UMAP-1")
     plt.ylabel("UMAP-2")
     plt.tight_layout()
-    out_path = OUT_DIR / "umap_pca_clusters_dbscan.png"
-    plt.savefig(out_path, dpi=300)
+    plt.savefig(OUT_DIR / "umap_hdbscan.png", dpi=300)
     plt.close()
-    print(f"Saved: {out_path}")
-
 
 if __name__ == "__main__":
     main()
